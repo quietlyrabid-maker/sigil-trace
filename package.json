@@ -1,0 +1,19 @@
+{
+  "name": "sigil-lattice-miniapp",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "description": "Sigil Lattice — Verifiable execution traces as a Nimiq Pay Mini App",
+  "scripts": {
+    "dev": "vite --host",
+    "build": "vite build",
+    "preview": "vite preview --host"
+  },
+  "dependencies": {
+    "@nimiq/mini-app-sdk": "^0.1.0"
+  },
+  "devDependencies": {
+    "vite": "^5.4.0"
+  },
+  "license": "MIT"
+}

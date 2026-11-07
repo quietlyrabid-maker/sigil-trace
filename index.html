@@ -1,0 +1,70 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+  <title>Sigil Lattice — Verifiable Execution Traces</title>
+  <link rel="stylesheet" href="./style.css" />
+</head>
+<body>
+  <div id="app">
+    <header>
+      <div class="logo">⬡ Sigil Lattice</div>
+      <p class="tagline">Verifiable execution traces inside Nimiq Pay</p>
+    </header>
+
+    <section id="status" class="card">
+      <h2>Wallet</h2>
+      <p id="wallet-status">Waiting for Nimiq Pay…</p>
+      <button id="btn-connect" disabled>Connect Wallet</button>
+      <div id="account-info" class="hidden">
+        <p><strong>Address:</strong> <span id="account-addr">—</span></p>
+        <p><strong>Consensus:</strong> <span id="consensus">—</span></p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>1. Define Sequence</h2>
+      <p class="hint">Choose the ordered events that form your plan. The terminus will uniquely fingerprint this exact path.</p>
+      <div id="event-list"></div>
+      <button id="btn-add-event">+ Add Event</button>
+    </section>
+
+    <section class="card">
+      <h2>2. Compute Terminus</h2>
+      <button id="btn-compute" disabled>Compute Lattice Terminus</button>
+      <div id="terminus-result" class="hidden">
+        <p class="mono" id="terminus-display">—</p>
+        <p class="hint">This 3-tuple is the unique fingerprint of your sequence.</p>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>3. Commit & Prove</h2>
+      <p class="hint">Sign the terminus with your Nimiq wallet to create a non-repudiable commitment. Optionally attach a small NIM tip as proof of seriousness.</p>
+      <button id="btn-sign" disabled>Sign Terminus</button>
+      <div id="sign-result" class="hidden">
+        <p class="mono" id="signature-display">—</p>
+      </div>
+      <div class="row">
+        <input type="number" id="tip-amount" placeholder="NIM tip (optional)" min="0" step="0.01" />
+        <button id="btn-pay" disabled>Send Tip + Commit</button>
+      </div>
+    </section>
+
+    <section class="card">
+      <h2>4. Verify</h2>
+      <p class="hint">Anyone can recompute the terminus from the public sequence + basis and check it matches the signed commitment.</p>
+      <button id="btn-verify" disabled>Verify Integrity</button>
+      <p id="verify-result" class="hidden"></p>
+    </section>
+
+    <footer>
+      <p>Built for the Nimiq Mini Apps Competition · MIT License</p>
+      <p class="small">Core idea: hash-chained, position-weighted lattice path in ℤ<sub>q</sub>³ produces a unique terminus. Change one step → different fingerprint.</p>
+    </footer>
+  </div>
+
+  <script type="module" src="./main.js"></script>
+</body>
+</html>
