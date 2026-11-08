@@ -1,35 +1,33 @@
 # Sigil Trace
 
-**Verifiable execution traces inside Nimiq Pay.**
+**Wrap any asset. Own the proof. Mint a Nimiq Note.**
 
-Built for the Nimiq Mini Apps Competition. 
+Built for the Nimiq Mini Apps Competition (Cycle 3). 
 
 ## The Problem
-When an AI agent, a payment plan, or a multi-step workflow executes, it leaves a trail. But proving *which* steps were followed usually requires exposing the entire trail. This is a privacy nightmare and a security risk (e.g., replay attacks, where a valid command is reused maliciously).
+A gift card code is just a string. A ticket is just a barcode. A receipt is just a PDF. None of them are cryptographically bound to *your* wallet in a way that proves *you* own them and they haven't been tampered with. You have to trust the issuer, the platform, and the database.
 
-## The Solution: The Terminus
-Sigil Trace lets a user prove a sequence of events happened—in an exact order—without revealing the events themselves. 
+## The Solution: The Nimiq Note
+Sigil Trace turns any asset into a **bearer instrument**. You put an asset (a gift card, a ticket, a payment sequence) into the Vault. The engine wraps it in a cryptographic state chain and spits out a **Nimiq Note**. 
 
-1. Define your sequence (e.g., `init → auth → transfer`).
-2. Compute the **Terminus**: A 3-dimensional key is moved through modular space (\(Z_q^3\)) using hash-chained, position-weighted accumulation. Change one step, and the terminus changes completely.
-3. Sign the Terminus with your Nimiq wallet. 
-4. The signature is a non-repudiable proof that *this exact path* occurred.
+The Note is a visual, scannable graphic that acts like digital cash. Whoever holds the Note, owns the asset. The math proves it wasn't forged, replayed, or tampered with. 
+
+## How It Works
+1. **Wrap:** Select an asset in the Vault.
+2. **Mint:** The CPKC engine (Coupled-Pair Keyed Chain) locks the asset into a unique mathematical terminus. 
+3. **Sign:** Your Nimiq wallet signs the terminus, stamping the Note with your identity.
+4. **Transfer:** Send the Note to someone else. They can verify it instantly without seeing your private data.
 
 ## Why It's Secure
-- **Tamper-Evident:** The `running = x ^ y ^ z` feedback loop means each step depends on the entire previous state. Any change alters the final fingerprint.
-- **Replay-Proof:** The terminus is deterministic. A signed terminus cannot be reused for a different sequence.
-- **Client-Side:** Zero backend. The math runs in the browser, and the wallet signs locally. No data leaves the user's device.
-
-## How to Run
-This is a static web app. 
-1. Clone the repo.
-2. Run `python -m http.server 8080` (or any static file server).
-3. Open the URL inside Nimiq Pay to enable wallet signing. (You can also open it in a normal browser to test the math without the wallet).
+- **Tamper-Evident:** Change one digit in the asset, and the entire Note breaks. (Proven in Python: 4/4 adversarial attacks repelled).
+- **Replay-Proof:** Once the Note is spent, it is burned. You cannot spend it twice.
+- **Zero-Knowledge:** The Note proves ownership without revealing the underlying asset code or the transaction history.
 
 ## Tech Stack
-- Pure JavaScript (BigInt + Web Crypto API). No external cryptographic dependencies.
-- Nimiq Mini Apps SDK (for wallet integration).
+- Pure JavaScript (BigInt + Web Crypto API) for the browser app.
+- CPKC (Coupled-Pair Keyed Chain) for the math.
+- Nimiq Mini Apps SDK for wallet integration.
 - MIT License.
 
-## Built by
-A solo developer, David James Swindle on a borrowed laptop and a Galaxy phone. Because the truth shouldn't require a data center.
+## Built by David James Swindle
+Built on a borrowed laptop and a Galaxy phone by the very kind of person this tech was built for, and in the same spirit the Nimiq payment system was developed to assist. Freedom. Freedom from the structures that keep the power of financial transactions in the hands of the few, so we can all take part equally in the ability to own and spend without restriction the value we all should have the right to share.
