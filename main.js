@@ -1,16 +1,12 @@
-cd ~ && { [ -d sigil-trace ] || git clone https://github.com/quietlyrabid-maker/sigil-trace.git; } && cd sigil-trace && git pull
-printf "Paste your Nimiq address (use a testnet one for testing): "
-read -r ADDR
-cat > main.js <<'EOF'
 const Q = (2n ** 128n) - 1n;
 const EVENT_TYPES = ["init", "auth", "transfer", "confirm", "settle", "audit", "notify", "close", "custom_a", "custom_b"];
 const SEED_SALT = "sigil-vault-nimiq-v1";
 
-// ---------- CONFIG ----------
-const RECIPIENT = "__RECIPIENT__";
+// ---------- CONFIG: EDIT THIS ----------
+const RECIPIENT = "NQ40 QUTA D1NB ERNF H8GG M6S8 H31J Y6PE B24X";
 const LUNA = 100000; // 1 NIM = 100,000 Luna
-// Demo valuation table (a fixed demo oracle). NIM per asset id.
-// A data-value="250" attribute on an .asset-card wins; then this table; then 100.
+// Demo valuation table (stated plainly: a fixed demo oracle). NIM per asset id.
+// If an .asset-card has data-value="250" that wins; otherwise this table; otherwise 100.
 const ASSET_VALUE_NIM = {};
 
 // ---------- Cryptographic Helpers ----------
@@ -106,6 +102,7 @@ async function connectWallet() {
 
 // ---------- Note Rendering ----------
 async function terminusBits(termHex) {
+  // 4 x SHA-256 = 1024 bits, so all 400 cells are driven by the terminus.
   let bits = "";
   for (let k = 0; k < 4; k++) {
     const h = await sha256Hex(termHex + ":" + k);
@@ -154,6 +151,7 @@ function renderNote() {
       <div class="note-wallet">${txLine}</div>
     </div>
   `;
+  // asset name set as text, not HTML
   document.querySelector("#note-visual .note-footer div").textContent = state.activeAsset;
   return renderMatrix(state.termHex);
 }
@@ -170,6 +168,7 @@ async function wrapAsset(assetId, assetName, dataValue) {
 
   if (!state.basis) state.basis = await generateBasis(SEED_SALT, EVENT_TYPES, Q);
 
+  // Asset AND value are bound into the terminus.
   const hash = await sha256Hex(`${assetId}:${state.valueNim}`);
   const seq = [0, 2, 4].map((i) => EVENT_TYPES[parseInt(hash.substring(i, i + 2), 16) % 10]);
 
@@ -186,6 +185,10 @@ async function wrapAsset(assetId, assetName, dataValue) {
 // ---------- Pay ----------
 async function payNote() {
   if (!state.terminus || !state.provider || state.accounts.length === 0) return;
+  if (RECIPIENT.startsWith("PASTE")) {
+    $("#sigil-status").textContent = "Set RECIPIENT address in main.js first.";
+    return;
+  }
   try {
     $("#btn-sign").disabled = true;
     $("#sigil-status").textContent = "Confirm payment in Nimiq Pay...";
@@ -194,6 +197,8 @@ async function payNote() {
       recipient: RECIPIENT,
       value: Math.round(state.valueNim * LUNA),
     };
+    // Memo carrying the terminus. Check the Nimiq provider API reference for the exact
+    // data-carrying method; the name below is a guess and falls back to a plain payment.
     let result;
     if (typeof state.provider.sendBasicTransactionWithData === "function") {
       result = await state.provider.sendBasicTransactionWithData({
@@ -227,7 +232,3 @@ function boot() {
 }
 
 boot();
-EOF
-sed -i '' "s|__RECIPIENT__|$ADDR|" main.js
-grep -n "const RECIPIENT" main.js
-git add main.js && git commit -m "Add payment flow, value-bound terminus" && git push
