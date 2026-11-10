@@ -1,6 +1,17 @@
+cd ~ && { [ -d sigil-trace ] || git clone https://github.com/quietlyrabid-maker/sigil-trace.git; } && cd sigil-trace && git pull
+printf "Paste your Nimiq address (use a testnet one for testing): "
+read -r ADDR
+cat > main.js <<'EOF'
 const Q = (2n ** 128n) - 1n;
 const EVENT_TYPES = ["init", "auth", "transfer", "confirm", "settle", "audit", "notify", "close", "custom_a", "custom_b"];
 const SEED_SALT = "sigil-vault-nimiq-v1";
+
+// ---------- CONFIG ----------
+const RECIPIENT = "__RECIPIENT__";
+const LUNA = 100000; // 1 NIM = 100,000 Luna
+// Demo valuation table (a fixed demo oracle). NIM per asset id.
+// A data-value="250" attribute on an .asset-card wins; then this table; then 100.
+const ASSET_VALUE_NIM = {};
 
 // ---------- Cryptographic Helpers ----------
 async function sha256Hex(str) {
@@ -38,7 +49,10 @@ async function computeTerminus(eventSequence, basis, q) {
 }
 
 // ---------- App State ----------
-const state = { provider: null, accounts: [], basis: null, terminus: null, activeAsset: null };
+const state = {
+  provider: null, accounts: [], basis: null, terminus: null,
+  termHex: "", activeAsset: null, valueNim: 0, txHash: null
+};
 const $ = (sel) => document.querySelector(sel);
 
 function setStatus(msg, isError = false) {
@@ -52,83 +66,79 @@ async function initProvider() {
   try {
     const mod = await import("@nimiq/mini-app-sdk");
     if (mod && mod.init) {
-      state.provider = await mod.init({ timeout: 12000 });
+      state.provider = await mod.init();
       setStatus("Connected via Mini App SDK");
-      $("#btn-connect").disabled = false; return;
+      $("#btn-connect").disabled = false;
+      return;
     }
   } catch (_) {}
-  
+
   const deadline = Date.now() + 10000;
   while (Date.now() < deadline) {
-    if (window.nimiq) { state.provider = window.nimiq; setStatus("Nimiq provider detected"); $("#btn-connect").disabled = false; return; }
+    if (window.nimiq) {
+      state.provider = window.nimiq;
+      setStatus("Nimiq provider detected");
+      $("#btn-connect").disabled = false;
+      return;
+    }
     await new Promise((r) => setTimeout(r, 300));
   }
-  setStatus("Open in Nimiq Pay to sign. You can still generate notes.", true);
+  setStatus("Open in Nimiq Pay to pay. You can still preview notes.", true);
 }
 
 async function connectWallet() {
   if (!state.provider) return;
   try {
-    if (state.provider.listAccounts) {
-      const accounts = await state.provider.listAccounts();
-      state.accounts = Array.isArray(accounts) ? accounts : [];
-    }
+    const accounts = await state.provider.listAccounts();
+    state.accounts = Array.isArray(accounts) ? accounts : [];
     if (state.accounts.length > 0) {
       $("#account-addr").textContent = state.accounts[0];
       $("#account-info").classList.remove("hidden");
       setStatus("Wallet connected");
-      $("#btn-sign").disabled = false;
+      if (state.terminus && !state.txHash) $("#btn-sign").disabled = false;
+    } else {
+      setStatus("No accounts returned", true);
     }
-  } catch (err) { setStatus("Connection failed", true); }
+  } catch (err) {
+    setStatus("Connection failed or rejected", true);
+  }
 }
 
-// ---------- The Nimiq Note Rendering ----------
-function renderMatrix(assetId) {
-  const matrix = document.getElementById('note-matrix');
-  matrix.innerHTML = '';
-  
-  let hash = 0;
-  for (let i = 0; i < assetId.length; i++) {
-    hash = ((hash << 5) - hash) + assetId.charCodeAt(i);
-    hash |= 0;
+// ---------- Note Rendering ----------
+async function terminusBits(termHex) {
+  let bits = "";
+  for (let k = 0; k < 4; k++) {
+    const h = await sha256Hex(termHex + ":" + k);
+    for (const c of h) bits += parseInt(c, 16).toString(2).padStart(4, "0");
   }
+  return bits;
+}
 
+async function renderMatrix(termHex) {
+  const matrix = document.getElementById("note-matrix");
+  if (!matrix) return;
+  matrix.innerHTML = "";
+  const bits = await terminusBits(termHex);
   for (let i = 0; i < 400; i++) {
-    const pixel = document.createElement('div');
-    pixel.className = 'pixel';
-    if (((hash >> (i % 32)) & 1) === 0) {
-      pixel.classList.add('off');
-    }
+    const pixel = document.createElement("div");
+    pixel.className = "pixel";
+    if (bits[i] === "0") pixel.classList.add("off");
     matrix.appendChild(pixel);
   }
 }
 
-async function wrapAsset(assetId, assetName) {
-  // Show the note
-  $("#note-container").style.display = "block";
-  $("#sigil-status").textContent = "Minting Note...";
-  $("#btn-sign").disabled = true;
-  state.activeAsset = assetName;
+function renderNote() {
+  const paid = !!state.txHash;
+  const shortHash = state.termHex.substring(0, 8).toUpperCase();
+  const who = state.accounts.length > 0 ? state.accounts[0].substring(0, 12) + "..." : "NOT CONNECTED";
+  const txLine = paid
+    ? `Tx: ${String(state.txHash).substring(0, 14)}...`
+    : "Unpaid: preview only";
 
-  if (!state.basis) state.basis = await generateBasis(SEED_SALT, EVENT_TYPES, Q);
-  
-  // Map the asset ID to a sequence to create the terminus
-  const hash = await sha256Hex(assetId);
-  const seq = [
-    EVENT_TYPES[parseInt(hash.substring(0,2), 16) % 10],
-    EVENT_TYPES[parseInt(hash.substring(2,4), 16) % 10],
-    EVENT_TYPES[parseInt(hash.substring(4,6), 16) % 10]
-  ];
-
-  state.terminus = await computeTerminus(seq, state.basis, Q);
-  
-  // Draw the visual Note
-  const shortHash = state.terminus[0].toString(16).substring(0, 8).toUpperCase();
-  
-  document.getElementById('note-visual').innerHTML = `
+  document.getElementById("note-visual").innerHTML = `
     <div class="note-header">
       <div class="note-logo">⬡ NIMIQ NOTE</div>
-      <div class="note-subtitle">Bearer Asset</div>
+      <div class="note-subtitle">${paid ? "Paid Receipt" : "Preview"}: ${state.valueNim} NIM</div>
     </div>
     <div class="matrix-wrapper">
       <div id="note-matrix" class="note-matrix"></div>
@@ -138,44 +148,78 @@ async function wrapAsset(assetId, assetName) {
       </div>
     </div>
     <div class="note-footer">
-      <div>${assetName}</div>
+      <div></div>
       <div class="note-wallet">Terminus: 0x${shortHash}...</div>
-      <div class="note-wallet">Signed by: ${state.accounts.length > 0 ? state.accounts[0].substring(0,12) + '...' : 'UNSIGNED'}</div>
+      <div class="note-wallet">From: ${who}</div>
+      <div class="note-wallet">${txLine}</div>
     </div>
   `;
-  
-  renderMatrix(assetId);
-  
-  $("#sigil-status").textContent = "Note minted.";
+  document.querySelector("#note-visual .note-footer div").textContent = state.activeAsset;
+  return renderMatrix(state.termHex);
+}
+
+async function wrapAsset(assetId, assetName, dataValue) {
+  $("#note-container").style.display = "block";
+  $("#sigil-status").textContent = "Minting preview...";
+  $("#btn-sign").disabled = true;
+  state.activeAsset = assetName;
+  state.txHash = null;
+
+  const v = Number(dataValue);
+  state.valueNim = v > 0 ? v : (ASSET_VALUE_NIM[assetId] ?? 100);
+
+  if (!state.basis) state.basis = await generateBasis(SEED_SALT, EVENT_TYPES, Q);
+
+  const hash = await sha256Hex(`${assetId}:${state.valueNim}`);
+  const seq = [0, 2, 4].map((i) => EVENT_TYPES[parseInt(hash.substring(i, i + 2), 16) % 10]);
+
+  state.terminus = await computeTerminus(seq, state.basis, Q);
+  state.termHex = state.terminus.map((n) => n.toString(16).padStart(32, "0")).join("");
+
+  await renderNote();
+
+  $("#btn-sign").textContent = `Pay ${state.valueNim} NIM & Seal`;
+  $("#sigil-status").textContent = "Preview ready. Connect wallet, then pay to seal.";
   if (state.accounts.length > 0) $("#btn-sign").disabled = false;
 }
 
-async function signNote() {
+// ---------- Pay ----------
+async function payNote() {
   if (!state.terminus || !state.provider || state.accounts.length === 0) return;
-  
-  const msg = `Sigil Vault Asset\nAsset: ${state.activeAsset}\nTerminus: ${state.terminus[0].toString(16)}`;
-  
   try {
-    $("#sigil-status").textContent = "Awaiting wallet signature...";
-    let sig;
-    if (state.provider.sign) sig = await state.provider.sign(msg);
-    else throw new Error("No sign method available");
-    
-    $("#sigil-status").textContent = "✓ NIMIQ ATTESTED";
     $("#btn-sign").disabled = true;
+    $("#sigil-status").textContent = "Confirm payment in Nimiq Pay...";
+
+    const tx = {
+      recipient: RECIPIENT,
+      value: Math.round(state.valueNim * LUNA),
+    };
+    let result;
+    if (typeof state.provider.sendBasicTransactionWithData === "function") {
+      result = await state.provider.sendBasicTransactionWithData({
+        ...tx, data: state.termHex.substring(0, 32)
+      });
+    } else {
+      result = await state.provider.sendBasicTransaction(tx);
+    }
+
+    state.txHash = typeof result === "string" ? result : (result && (result.hash || result.txHash)) || JSON.stringify(result);
+    await renderNote();
+    $("#sigil-status").textContent = "✓ PAID & SEALED";
   } catch (err) {
-    $("#sigil-status").textContent = "Signature rejected.";
+    $("#btn-sign").disabled = false;
+    $("#sigil-status").textContent = "Payment rejected or failed.";
   }
 }
 
 // ---------- Boot ----------
 function boot() {
   $("#btn-connect").addEventListener("click", connectWallet);
-  $("#btn-sign").addEventListener("click", signNote);
-  
-  document.querySelectorAll(".asset-card").forEach(card => {
+  $("#btn-sign").addEventListener("click", payNote);
+
+  document.querySelectorAll(".asset-card").forEach((card) => {
     card.addEventListener("click", () => {
-      wrapAsset(card.dataset.id, card.dataset.name);
+      wrapAsset(card.dataset.id, card.dataset.name, card.dataset.value);
     });
   });
 
@@ -183,3 +227,7 @@ function boot() {
 }
 
 boot();
+EOF
+sed -i '' "s|__RECIPIENT__|$ADDR|" main.js
+grep -n "const RECIPIENT" main.js
+git add main.js && git commit -m "Add payment flow, value-bound terminus" && git push
