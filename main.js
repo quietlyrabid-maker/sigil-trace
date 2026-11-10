@@ -156,79 +156,52 @@ function renderNote() {
   return renderMatrix(state.termHex);
 }
 
-async function wrapAsset(assetId, assetName, dataValue) {
+       async function wrapAsset(assetId, assetName) {
   $("#note-container").style.display = "block";
-  $("#sigil-status").textContent = "Minting preview...";
+  $("#sigil-status").textContent = "Minting Note...";
   $("#btn-sign").disabled = true;
   state.activeAsset = assetName;
-  state.txHash = null;
 
-  const v = Number(dataValue);
-  state.valueNim = v > 0 ? v : (ASSET_VALUE_NIM[assetId] ?? 100);
+  // 1. Generate the basis for the three valid events
+  if (!state.basis) state.basis = await generateBasis(SEED_SALT, ["init", "auth", "transfer"], Q);
 
-  if (!state.basis) state.basis = await generateBasis(SEED_SALT, EVENT_TYPES, Q);
+  // 2. Hash the full asset ID
+  const fullHash = await sha256Hex(assetId);
 
-  // Asset AND value are bound into the terminus.
-  const hash = await sha256Hex(`${assetId}:${state.valueNim}`);
-  const seq = [0, 2, 4].map((i) => EVENT_TYPES[parseInt(hash.substring(i, i + 2), 16) % 10]);
+  // 3. Map the hash characters to the three valid event types
+  let seq = [];
+  for (let i = 0; i < fullHash.length; i++) {
+    const charCode = fullHash.charCodeAt(i);
+    if (charCode % 3 === 0) seq.push("init");
+    else if (charCode % 3 === 1) seq.push("auth");
+    else seq.push("transfer");
+  }
 
+  // 4. Compute the terminus
   state.terminus = await computeTerminus(seq, state.basis, Q);
-  state.termHex = state.terminus.map((n) => n.toString(16).padStart(32, "0")).join("");
+  const terminusHex = state.terminus[0].toString(16);
 
-  await renderNote();
+  // 5. Render the Note
+  document.getElementById('note-visual').innerHTML = `
+    <div class="note-header">
+      <div class="note-logo">⬡ NIMIQ NOTE</div>
+      <div class="note-subtitle">Bearer Asset</div>
+    </div>
+    <div class="matrix-wrapper">
+      <div id="note-matrix" class="note-matrix"></div>
+      <div class="sigil-stamp">
+        <div class="sigil-icon">⬡</div>
+        <div class="sigil-text">SIGIL</div>
+      </div>
+    </div>
+    <div class="note-footer">
+      <div>${assetName}</div>
+      <div class="note-wallet">Terminus: 0x${terminusHex.substring(0, 16)}...</div>
+      <div class="note-wallet">Owner: ${state.accounts.length > 0 ? state.accounts[0].substring(0,12) + '...' : 'UNSIGNED'}</div>
+    </div>
+  `;
 
-  $("#btn-sign").textContent = `Pay ${state.valueNim} NIM & Seal`;
-  $("#sigil-status").textContent = "Preview ready. Connect wallet, then pay to seal.";
+  renderMatrix(terminusHex);
+  $("#sigil-status").textContent = "Note minted. Sign to own.";
   if (state.accounts.length > 0) $("#btn-sign").disabled = false;
-}
-
-// ---------- Pay ----------
-async function payNote() {
-  if (!state.terminus || !state.provider || state.accounts.length === 0) return;
-  if (RECIPIENT.startsWith("PASTE")) {
-    $("#sigil-status").textContent = "Set RECIPIENT address in main.js first.";
-    return;
-  }
-  try {
-    $("#btn-sign").disabled = true;
-    $("#sigil-status").textContent = "Confirm payment in Nimiq Pay...";
-
-    const tx = {
-      recipient: RECIPIENT,
-      value: Math.round(state.valueNim * LUNA),
-    };
-    // Memo carrying the terminus. Check the Nimiq provider API reference for the exact
-    // data-carrying method; the name below is a guess and falls back to a plain payment.
-    let result;
-    if (typeof state.provider.sendBasicTransactionWithData === "function") {
-      result = await state.provider.sendBasicTransactionWithData({
-        ...tx, data: state.termHex.substring(0, 32)
-      });
-    } else {
-      result = await state.provider.sendBasicTransaction(tx);
-    }
-
-    state.txHash = typeof result === "string" ? result : (result && (result.hash || result.txHash)) || JSON.stringify(result);
-    await renderNote();
-    $("#sigil-status").textContent = "✓ PAID & SEALED";
-  } catch (err) {
-    $("#btn-sign").disabled = false;
-    $("#sigil-status").textContent = "Payment rejected or failed.";
-  }
-}
-
-// ---------- Boot ----------
-function boot() {
-  $("#btn-connect").addEventListener("click", connectWallet);
-  $("#btn-sign").addEventListener("click", payNote);
-
-  document.querySelectorAll(".asset-card").forEach((card) => {
-    card.addEventListener("click", () => {
-      wrapAsset(card.dataset.id, card.dataset.name, card.dataset.value);
-    });
-  });
-
-  initProvider();
-}
-
-boot();
+       }
