@@ -1,0 +1,74 @@
+@import "tailwindcss";
+@import "tailwindcss-safe-area";
+
+@theme {
+  --text-xs: 12px;
+  --text-xs--line-height: 16px;
+  --text-sm: 14px;
+  --text-sm--line-height: 20px;
+  --text-base: 16px;
+  --text-base--line-height: 24px;
+  --text-lg: 18px;
+  --text-lg--line-height: 28px;
+  --text-xl: 20px;
+  --text-xl--line-height: 28px;
+  --text-2xl: 24px;
+  --text-2xl--line-height: 32px;
+  --text-3xl: 30px;
+  --text-3xl--line-height: 36px;
+}
+
+:root {
+  color-scheme: light dark;
+  /* Parchment assay-office light mode */
+  --bg: #ece5d3;
+  --surface: #f7f2e3;
+  --surface-alt: #e3dac2;
+  --text: #262218;
+  --dim: #6f6752;
+  --border: #cfc4a4;
+  --accent: #97760f;
+  --accent-ink: #fffaf0;
+  --verdigris: #1f7a6d;
+  --oxblood: #a33327;
+  --cell-on: #97760f;
+  --cell-off: rgba(38, 34, 24, 0.10);
+  --radius: 10px;
+  --space-surface: var(--surface);
+  --space-surface-alt: var(--surface-alt);
+  --space-muted: var(--dim);
+  --space-border: var(--border);
+  --space-accent: var(--accent);
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    /* Ink-black vault dark mode */
+    --bg: #101014;
+    --surface: #1b1b21;
+    --surface-alt: #24242c;
+    --text: #ece5d3;
+    --dim: #a39a83;
+    --border: #35322a;
+    --accent: #c9a227;
+    --accent-ink: #171204;
+    --verdigris: #3fae9c;
+    --oxblood: #d96a5b;
+    --cell-on: #c9a227;
+    --cell-off: rgba(236, 229, 211, 0.08);
+  }
+}
+
+.font-plate {
+  font-family: "Iowan Old Style", Palatino, "Palatino Linotype", Georgia, serif;
+}
+.font-serial {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+}
+
+/* Phone tap targets: at least 36px tall for primary controls. */
+@layer base {
+  button, [role="button"], select, summary, input:not([type="checkbox"], [type="radio"]) {
+    min-height: 2.25rem;
+  }
+}
